@@ -1,0 +1,67 @@
+{% extends "layout.html" %}
+{% set active_page = "data" %}
+{% set help_page = ["https://kizniche.github.io/Mycodo/Inputs/", dict_translation['data']['title']] %}
+
+{% block title %} - {{dict_translation['data']['title']}}{% endblock %}
+
+{% block head %}
+  <script type="text/javascript" src="/static/js/multiselect.min.js"></script>
+{% endblock %}
+
+{%- block body %}
+  <!-- Route: /data -->
+  <main role="main" class="container">
+    {% include 'flash_messages.html' %}
+
+    <h4>{{dict_translation['data']['title']}} <a href="{{help_page[0]}}" target="_blank"><span style="font-size: 16px" class="fas fa-question-circle"></span></a></h4>
+
+    <div style="clear: both; padding: 0.5em 0;"></div>
+
+    <form id="new_input_form" method="post" action="/data" style="padding-bottom: 0.5em">
+      {{form_add_input.hidden_tag()}}
+      <input type="hidden" name="form-name" value="addSensor">
+      <div class="row small-gutters" style="padding-left: 0.75em">
+        <div class="col-auto">
+          {{form_add_input.input_type(class_='selectpicker', **{'data-live-search': 'true', 'title': _('Input') + ': ' + dict_translation['select_one']['title']})}}
+        </div>
+        <div class="col-auto">
+          {{form_add_input.input_add(class_='btn btn-primary')}}
+        </div>
+      </div>
+    </form>
+
+    <form id="new_math_form" method="post" action="/data">
+      {{form_add_math.hidden_tag()}}
+      <div class="row small-gutters" style="padding-left: 0.75em">
+        <div class="col-auto">
+          {{form_add_math.math_type(class_='selectpicker', **{'title': _('Math') + ': ' + dict_translation['select_one']['title']})}}
+        </div>
+        <div class="col-auto">
+          {{form_add_math.math_add(class_='btn btn-primary')}}
+        </div>
+      </div>
+    </form>
+
+    <div style="clear: both; padding: 1em 0;"></div>
+
+    {% if display_order_input %}
+      {% include 'pages/data_options/input.html' %}
+    {% endif %}
+
+    {% if display_order_math %}
+      {% include 'pages/data_options/math.html' %}
+    {% endif %}
+
+  </main>
+
+  <div style="clear: both; padding-bottom: 1.5em;"></div>
+
+  <script>
+    $('.collapse').on('show.bs.collapse', function(){
+      $(this).parent().find(".fa-plus-square").removeClass("fa-plus-square").addClass("fa-minus-square");
+    }).on('hide.bs.collapse', function(){
+      $(this).parent().find(".fa-minus-square").removeClass("fa-minus-square").addClass("fa-plus-square");
+    });
+  </script>
+
+{% endblock -%}

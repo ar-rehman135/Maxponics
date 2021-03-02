@@ -1,0 +1,133 @@
+{% extends "layout.html" %}
+{% set active_page = "function" %}
+{% set help_page = ["https://kizniche.github.io/Mycodo/Functions/", dict_translation['function']['title']] %}
+
+{% block title %} - {{dict_translation['function']['title']}}{% endblock %}
+
+{% block head %}
+  <link rel="stylesheet" type="text/css" href="/static/css/bootstrap-clockpicker.min.css">
+
+  <script type="text/javascript" src="/static/js/multiselect.min.js"></script>
+{% endblock %}
+
+{% block body %}
+  <!-- Route: /function -->
+  <div class="container">
+    {% include 'flash_messages.html' %}
+
+    <h4>{{dict_translation['function']['title']}} <a href="{{help_page[0]}}" target="_blank"><span style="font-size: 16px" class="fas fa-question-circle"></span></a></h4>
+    <p>{{_('Functions conduct complex tasks, often coupling one or more <a href="/data">Data</a> sources with <a href="/output">Outputs</a>. For example, this could be using a PID Controller to create a feedback loop with a temperature sensor and heater in order to regulate temperature.')}}</p>
+
+    <div style="clear: both; padding: 0.5em 0;"></div>
+
+    <form id="new_function_form" method="post" action="/function">
+    {{form_mod_pid_base.csrf_token}}
+
+    <div class="row small-gutters" style="padding-left: 0.75em">
+      <div class="col-auto">
+        <select class="selectpicker" data-live-search="true" title="{{_('Function')}}: {{dict_translation['select_one']['title']}}" id="function_type" name="function_type">
+        {% for each_controller in choices_functions_add -%}
+          <option value="{{each_controller['value']}}">{{each_controller['item']}}</option>
+        {% endfor -%}
+        </select>
+      </div>
+
+      <div class="col-auto">
+        {{form_add_function.func_add(class_='btn btn-primary')}}
+      </div>
+    </div>
+
+    </form>
+
+    <div style="clear: both; padding: 1em 0;"></div>
+
+  {%- if display_order_function -%}
+    {%- for order in display_order_function -%}
+
+      {% include 'pages/function_options/conditional.html' %}
+      {% include 'pages/function_options/pid.html' %}
+      {% include 'pages/function_options/trigger.html' %}
+      {% include 'pages/function_options/function_spacer.html' %}
+      {% include 'pages/function_options/function_actions.html' %}
+      {% include 'pages/function_options/custom_function.html' %}
+
+    {% endfor %}
+
+    <div class="container">
+
+      <div class="form-inline" style="padding-bottom: 1em;">
+        <div class="form-group">
+          <a data-toggle="collapse" href="#collapseContainerReorderFunction" aria-expanded="false" aria-controls="collapseContainerReorderFunction" class="btn btn-sm btn-primary" role="button">{{dict_translation['function']['title'] + ' ' + dict_translation['reorder']['title']}}</a>
+        </div>
+      </div>
+
+      <div class="collapse" id="collapseContainerReorderFunction" style="padding-bottom: 1em">
+
+        <form method="post" action="/function">
+        {{form_base.csrf_token}}
+
+        <div class="row" style="padding-bottom: 0.5em">
+          <div class="col-auto">
+            {{form_base.reorder(class_='btn btn-primary')}}
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="col-auto">
+            {{form_base.reorder_type(class_='form-control', value='function')}}
+            <select style="display: none" name="from[]" id="multiselect" class="" size="8" multiple="multiple"></select>
+            <div>
+              <select name="list_visible_elements" id="multiselect_to" class="form-control" size="8" multiple="multiple">
+              {% if display_order_function -%}
+                {% for each_visible in display_order_function if each_visible in names_function %}
+                  <option value="{{each_visible}}">{{names_function[each_visible]}}</option>
+                {% endfor %}
+              {% endif %}
+              </select>
+              <div class="row">
+                <div class="col-sm-6">
+                  <button type="button" id="multiselect_move_up" class="btn btn-sm btn-block btn-primary"><i class="fa fa-arrow-up"></i></button>
+                </div>
+                <div class="col-sm-6">
+                  <button type="button" id="multiselect_move_down" class="btn btn-sm btn-block btn-primary"><i class="fa fa-arrow-down"></i></button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        </form>
+
+      </div>
+
+    </div>
+
+  {% endif %}
+
+  </div>
+
+  <script type="text/javascript" src="/static/js/bootstrap-clockpicker.min.js"></script>
+  <script type="text/javascript">
+    $('.clockpicker').clockpicker({
+      donetext: 'Done'
+    });
+
+    $('.collapse').on('show.bs.collapse', function(){
+      $(this).parent().find(".fa-plus-square").removeClass("fa-plus-square").addClass("fa-minus-square");
+    }).on('hide.bs.collapse', function(){
+      $(this).parent().find(".fa-minus-square").removeClass("fa-minus-square").addClass("fa-plus-square");
+    });
+
+    jQuery(document).ready(function($) {
+        $('#multiselect').multiselect({
+            sort: false,
+            keepRenderingSort: true
+        });
+    });
+
+    $('#collapseContainerReorderFunction').on('shown.bs.collapse', function () {
+      this.scrollIntoView();
+    });
+  </script>
+
+{% endblock %}

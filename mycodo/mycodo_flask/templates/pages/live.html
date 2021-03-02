@@ -1,0 +1,194 @@
+{% extends "layout.html" %}
+{% set active_page = "live" %}
+{% set help_page = ["https://kizniche.github.io/Mycodo/Data-Viewing/#live-measurements", _('Live Measurements')] %}
+
+{% block title %} - {{_('Live')}}{% endblock %}
+
+{% block head %}
+  <script>
+    function updateMeasurements(unique_id, measure_type, measurement_id, period) {
+      const url = '/last/' + unique_id + '/' + measure_type + '/' + measurement_id + '/' + period.toString();
+      let measure_string = '';
+      measure_string = unique_id + '-' + measure_type + '-' + measurement_id;
+      $.ajax(url, {
+        success: function(data, responseText, jqXHR) {
+          if (jqXHR.status === 204) {
+            document.getElementById(measure_string + "-time").innerHTML = "No Data Last " + period.toString() + " sec";
+            document.getElementById(measure_string + "-value").innerHTML = "0";
+          }
+          else {
+            const time = data[0];
+            const measurement_val = parseFloat(data[1].toFixed(3)).toString();
+            const date = new Date(parseFloat(time));
+            const year = date.getFullYear();
+            const month = date.getMonth() + 1;
+            const day = date.getDate();
+            const hours = date.getHours();
+            const minutes = "0" + date.getMinutes();
+            const seconds = "0" + date.getSeconds();
+            document.getElementById(measure_string + "-time").innerHTML = year + "/" + month + "/" + day + " " + hours + ':' + minutes.substr(-2) + ':' + seconds.substr(-2);
+            document.getElementById(measure_string + "-value").innerHTML = measurement_val;
+          }
+        },
+        error: function(XMLHttpRequest, textStatus, errorThrown) {
+          document.getElementById(measure_string + "-time").innerHTML = "No Data Last " + period.toString() + " sec";
+          document.getElementById(measure_string + "-value").innerHTML = "0";
+        },
+        cache: false
+      });
+    }
+
+    function liveTextData(unique_id, measure_type, measurement_id, period) {
+      // Update when page first loads
+      updateMeasurements(unique_id, measure_type, measurement_id, period);
+      setInterval(function () {
+        // Update after every 30 seconds
+        updateMeasurements(unique_id, measure_type, measurement_id, period);
+      }, 30000);
+    }
+
+    $(function() {
+      {%- for each_input in table_input.query.filter(table_input.is_activated).all() -%}
+        {% for each_meas in table_device_measurements.query.filter(table_device_measurements.device_id == each_input.unique_id).all() if each_meas.is_enabled %}
+          liveTextData('{{each_input.unique_id}}', 'input', '{{each_meas.unique_id}}', {{each_input.period * 2}});
+        {% endfor %}
+      {%- endfor -%}
+
+      {%- for each_math in table_math.query.filter(table_math.is_activated).all() -%}
+        {% for each_meas in table_device_measurements.query.filter(table_device_measurements.device_id == each_math.unique_id).all() if each_meas.is_enabled %}
+
+          {%- if each_math.math_type == 'redundancy' -%}
+          liveTextData('{{each_math.unique_id}}', 'math', '{{each_meas.unique_id}}', 14400);
+          {%- else -%}
+          liveTextData('{{each_math.unique_id}}', 'math', '{{each_meas.unique_id}}', {{each_math.period * 2}});
+          {%- endif -%}
+
+        {% endfor %}
+      {%- endfor -%}
+    });
+  </script>
+{% endblock %}
+
+{%- block body %}
+  <!-- Route: /live -->
+  <main role="main" class="container">
+
+    {% include 'flash_messages.html' %}
+
+    {%- if not activated_inputs and not activated_maths -%}
+    <div>
+      {{_('No Data Sources Activated')}}. <a href="/data">Click here</a> to go to the Data page. Read the <a href="https://kizniche.github.io/Mycodo">Manual</a> to become more familiar with the system and configuration options.
+    </div>
+    {%- endif -%}
+
+    {% for each_order_input_id in display_order_input -%}
+      {%- set each_input = table_input.query.filter(
+                              and_(table_input.unique_id == each_order_input_id,
+                                   table_input.is_activated)).first() -%}
+      {%- if each_input -%}
+
+    <div style="padding: 0.5em; margin-bottom: 0.7em; border: 1px solid #ddd; border-radius: 5px;">
+
+      <div class="row">
+        <div class="col-12 col-sm-6 text-left">
+          {{each_input.name}} (Input {{each_input.unique_id[:8]}})
+          {%- if each_input.device != 'EDGE' -%}
+            <div>
+               {{_('Input (%(type)s), %(sec)s second interval', type=each_input.device, sec=each_input.period)}}
+            </div>
+          {%- endif -%}
+        </div>
+
+        <div class="col-12 col-sm-6 text-right">
+          {{_('Measurement')}} | {{_('Timestamp')}}
+        {% for each_meas in table_device_measurements.query.filter(table_device_measurements.device_id == each_input.unique_id).all() if each_meas.is_enabled %}
+          {% set measure_string = each_input.unique_id + '-input-' + each_meas.unique_id %}
+          <div>
+            <b><span id="{{measure_string}}-value">0.0</span>
+
+          {%- if dict_units[dict_measure_units[each_meas.unique_id]]['unit'] -%}
+            {{' ' + dict_units[dict_measure_units[each_meas.unique_id]]['unit']}}
+          {%- endif -%}</b>
+
+          {%- if each_meas.conversion_id or each_meas.rescaled_unit -%}
+            {{' (' + dict_units[dict_measure_units[each_meas.unique_id]]['name'] + ') '}}
+          {%- else -%}
+            {{' (' + dict_measurements[each_meas.measurement]['name'] + ') '}}
+          {%- endif -%}
+
+          {%- if each_meas.name -%}
+            {{' (' + each_meas.name + ') '}}
+          {%- endif -%}
+
+            CH{{each_meas.channel}} | <span id="{{measure_string}}-time">&lt;{{_('Please wait')}}&gt;</span><br>
+          </div>
+        {% endfor %}
+        </div>
+      </div>
+
+    </div>
+
+      {%- endif -%}
+    {%- endfor -%}
+
+    {% for each_order_math_id in display_order_math %}
+      {%- set each_math = table_math.query.filter(
+                             and_(table_math.unique_id == each_order_math_id,
+                                  table_math.is_activated)).first() -%}
+      {%- if each_math -%}
+
+    <div style="padding: 0.5em; margin-bottom: 0.7em; border: 1px solid #ddd; border-radius: 5px;">
+
+      <div class="row">
+        <div class="col-12 col-sm-6 text-left">
+          {{each_math.name}} (Math {{each_math.unique_id[:8]}})
+          <div>
+            {{_('Math (%(type)s), %(sec)s second interval', type=each_math.math_type, sec=each_math.period)}}
+          </div>
+        </div>
+
+        <div class="col-12 col-sm-6 text-right">
+          {{_('Measurement')}} | {{_('Timestamp')}}
+        {% for each_meas in table_device_measurements.query.filter(table_device_measurements.device_id == each_math.unique_id).all() if each_meas.is_enabled %}
+          {% set measure_string = each_math.unique_id + '-math-' + each_meas.unique_id %}
+          <div>
+            <b><span id="{{measure_string}}-value">0.0</span>
+
+          {%- if dict_units[dict_measure_units[each_meas.unique_id]]['unit'] -%}
+            {{' ' + dict_units[dict_measure_units[each_meas.unique_id]]['unit']}}
+          {%- endif -%}</b>
+
+          {%- if dict_measure_measurements[each_meas.unique_id] in dict_measurements and
+                 dict_measurements[dict_measure_measurements[each_meas.unique_id]]['name'] -%}
+            {{' (' + dict_measurements[dict_measure_measurements[each_meas.unique_id]]['name'] + ') '}}
+          {%- elif dict_units[dict_measure_units[each_meas.unique_id]]['name'] -%}
+            {{' (' + dict_units[dict_measure_units[each_meas.unique_id]]['name'] + ') '}}
+          {%- endif -%}
+
+          {%- if each_meas.name -%}
+            {{' (' + each_meas.name + ') '}}
+          {%- endif -%}
+
+            CH{{each_meas.channel}} | <span id="{{measure_string}}-time">&lt;{{_('Please wait')}}&gt;</span><br>
+          </div>
+        {% endfor %}
+        </div>
+
+      </div>
+
+    </div>
+
+      {% endif %}
+    {%- endfor -%}
+
+  </main>
+
+  <script>
+    $('.collapse').on('show.bs.collapse', function(){
+      $(this).parent().find(".fa-plus-square").removeClass("fa-plus-square").addClass("fa-minus-square");
+    }).on('hide.bs.collapse', function(){
+      $(this).parent().find(".fa-minus-square").removeClass("fa-minus-square").addClass("fa-plus-square");
+    });
+  </script>
+
+{% endblock -%}
