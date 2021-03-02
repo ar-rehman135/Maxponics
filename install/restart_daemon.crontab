@@ -1,0 +1,1 @@
+@reboot /var/mycodo-root/env/bin/python /var/mycodo-root/mycodo/scripts/restart_daemon.py --continuouscheck &

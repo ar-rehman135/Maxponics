@@ -1,0 +1,622 @@
+{% extends "layout.html" %}
+{% set active_page = "output" %}
+{% set help_page = ["https://kizniche.github.io/Mycodo/Outputs/", dict_translation['output']['title']] %}
+
+{% block title %} - {{dict_translation['output']['title']}}{% endblock %}
+
+{% block head %}
+
+<link href="/static/css/toastr.min.css" rel="stylesheet"/>
+<script src="/static/js/toastr.min.js"></script>
+
+<script type="text/javascript" src="/static/js/multiselect.min.js"></script>
+
+<script type="text/javascript">
+  $(document).ready(function() {
+    toastr.options = {
+      "closeButton": true,
+      "debug": false,
+      "newestOnTop": false,
+      "progressBar": false,
+      "positionClass": "toast-top-right",
+      "preventDuplicates": false,
+      "onclick": null,
+      "showDuration": "300",
+      "hideDuration": "1000",
+      "timeOut": "7000",
+      "extendedTimeOut": "10000",
+      "showEasing": "swing",
+      "hideEasing": "linear",
+      "showMethod": "fadeIn",
+      "hideMethod": "fadeOut"
+    }
+  });
+  function getAjax(btn_val) {
+    $.ajax({
+      type: 'GET',
+      url: '/output_mod/' + btn_val,
+    {% if not misc.hide_alert_success %}
+      success: function(data) {
+        if (data.startsWith("SUCCESS")) toastr['success']("Output " + btn_val.split("/")[0] + ": " + data);
+        else toastr['error']("Output " + btn_val.split("/")[0] + ": " + data);
+      },
+    {% endif %}
+    {% if not misc.hide_alert_warning %}
+      error: function(data) {
+        toastr['error']("Output " + btn_val.split("/")[0] + ": " + data);
+      }
+    {% endif %}
+    });
+  }
+
+  $(document).ready(function() {
+    $('.turn_on').click(function() {
+      const btn_val = this.name;
+      const id = btn_val.split('/')[0];
+      {% if not misc.hide_alert_info %}
+      toastr['info']('Command sent to turn output ' + id + ' On');
+      {% endif %}
+      getAjax(btn_val);
+    });
+    $('.turn_off').click(function() {
+      const btn_val = this.name;
+      const id = btn_val.split('/')[0];
+      {% if not misc.hide_alert_info %}
+      toastr['info']('Command sent to turn output ' + id + ' Off');
+      {% endif %}
+      getAjax(btn_val);
+    });
+    $('.output_on_amt').click(function() {
+      const btn_val = this.name;
+      const output_id = btn_val.split('/')[0];
+      const channel_id = btn_val.split('/')[1];
+      const on_type = btn_val.split('/')[3];
+      const on_amt = $('#' + on_type + '_on_amt_' + output_id + '_' + channel_id).val();
+      {% if not misc.hide_alert_info %}
+      toastr['info']('Command sent to turn output ' + output_id + ' On for ' + on_amt + ' ' + on_type);
+      {% endif %}
+      getAjax(btn_val + on_amt);
+    });
+  });
+</script>
+
+<script>
+  function pad(num, size) {
+    let s = num + "";
+    while (s.length < size) s = "0" + s;
+    return s;
+  }
+  function gpioState() {
+    const url = '/outputstate';
+    $.getJSON(url,
+      function(data, responseText, jqXHR) {
+        if (jqXHR.status !== 204) {
+          $.each(data,
+            function(output_id, states) {
+              for (i = 0; i < Object.keys(states).length; i++) {
+                if (states[i] !== null) {
+                  document.getElementById(output_id + "-" + i + "-output-state").className = "row small-gutters active-background";
+                  if (states[i] !== 'off') {
+                    if (states[i] === 'on') {
+                      document.getElementById(output_id + "-" + i + "-input-output-state").value = '{{_('Active')}}';
+                    } else {
+                      document.getElementById(output_id + "-" + i + "-input-output-state").value = '{{_('Active')}}, ' + states[i].toFixed(1);
+                    }
+                  } else {
+                    document.getElementById(output_id + "-" + i + "-output-state").className = "row small-gutters inactive-background";
+                    document.getElementById(output_id + "-" + i + "-input-output-state").value = '{{_('Inactive')}}';
+                  }
+                }
+              }
+            }
+          );
+        }
+        else {
+          {% for each_output in output %}
+            {% for each_output_channel in dict_outputs[each_output.output_type]['channels_dict']  %}
+          document.getElementById("{{each_output.unique_id}}-{{each_output_channel}}-output-state").className = "row small-gutters pause-background";
+          document.getElementById("{{each_output.unique_id}}-{{each_output_channel}}-input-output-state").value = '{{_('No Connection')}}';
+            {% endfor %}
+          {% endfor %}
+        }
+      }
+    );
+  }
+
+  $(function() {
+    gpioState();  // Update when page first loads
+    setInterval(function () {  // Refresh every 5 seconds
+      gpioState();
+    }, 5000);
+  });
+
+</script>
+{% endblock %}
+
+{% block body %}
+  <!-- Route: /output -->
+  <main role="main" class="container">
+    {% include 'flash_messages.html' %}
+
+    <h4>{{dict_translation['output']['title']}} <a href="{{help_page[0]}}" target="_blank"><span style="font-size: 16px" class="fas fa-question-circle"></span></a></h4>
+
+    <p>{{_('Output devices enable Mycodo to manipulate things through the use of outputs (wired and wireless), PWM signals, and executing commands. When linked to a PID controller, with an input, output devices can be used for feedback regulation.')}}</p>
+
+    <div style="clear: both; padding: 0.5em 0;"></div>
+
+    <form id="new_output_form" method="post" action="/output">
+      {{form_add_output.hidden_tag()}}
+
+      <div class="row small-gutters" style="padding-left: 0.75em">
+        <div class="col-2 col-lg-1">
+          {{form_add_output.output_quantity(class_='form-control', type="number", value=1, **{'title': _('Quantity')})}}
+        </div>
+        <div class="col-auto">
+          {{form_add_output.output_type(class_='selectpicker', **{'title': dict_translation['output']['title'] + ': ' + dict_translation['select_one']['title']})}}
+        </div>
+        <div class="col-auto">
+          {{form_add_output.output_add(class_='btn btn-primary btn-block')}}
+        </div>
+      </div>
+    </form>
+
+    <div style="clear: both; padding: 1em 0;"></div>
+
+    {%- if display_order_output -%}
+      {%- for order in display_order_output -%}
+        {%- for each_output in output if each_output.unique_id == order -%}
+
+      <div class="container" style="border: 2px solid #ddd; border-radius: 5px;">
+        <form id="mod_output_form" method="post" action="/output">
+        {{form_mod_output.csrf_token}}
+        {{form_mod_output.output_id(class_='form-control', value=each_output.unique_id)}}
+        {{form_mod_output.output_pin(class_='form-control', value=each_output.pin)}}
+
+        {% set form = form_mod_output %}
+        {% set dict_options = dict_outputs[each_output.output_type] %}
+        {% set each_device = each_output %}
+        {% set unique_id = each_output.unique_id %}
+        {% set custom_options_values = custom_options_values_outputs %}
+
+        {% if dict_outputs[each_output.output_type]['channels_dict']|length == 1 %}
+
+        <div class="row small-gutters pause-background" style="border-bottom: 1px solid #ddd; padding: 0.4em 0.2em 0.4em 0;" id="{{each_output.unique_id}}-0-output-state">
+          <div class="col-2 col-md-1 text-center icon-fh">
+            <a data-toggle="collapse" href="#collapseContainer{{each_output.unique_id}}" aria-expanded="false" aria-controls="collapseContainer{{each_output.unique_id}}">
+              <span style="font-size: 3.6em" class="collapse-button{{each_output.unique_id}} fa fa-plus-square"></span>
+            </a>
+          </div>
+          <div class="col-5 col-md-2 small-gutters">
+            <input class="form-control" disabled="" value="{{each_output.name}}" type="text">
+          </div>
+          <div class="col-5 col-md-3 small-gutters">
+            <input class="form-control" disabled="" value="[{{each_output.interface}}] {{dict_outputs[each_output.output_type]['output_name']}}{% if dict_outputs[each_output.output_type]['output_library'] %} ({{dict_outputs[each_output.output_type]['output_library']}}){% endif %}" type="text">
+          </div>
+          <div class="col-4 col-md-2 small-gutters">
+            <input class="form-control btn btn-primary btn-sm btn-block" type="button" onclick="setClipboard('{{each_output.unique_id}}')" id="{{each_output.unique_id}}-0-input-output-state" title="[{{'%02d' % each_output.id}}] UUID: {{each_output.unique_id}}, {{dict_translation['copy_to_clipboard']['phrase']}}" value="{{ _('Unconfigured')}}">
+          </div>
+
+        {% if 'button_on' in dict_options['options_enabled'] -%}
+          <div class="col-4 col-md-2 small-gutters">
+            <input class="form-control btn btn-primary btn-sm btn-success btn-block turn_on" id="turn_on" name="{{each_output.unique_id}}/0/on/sec/0" type="button" value="{{dict_translation['on']['title']}}">
+          </div>
+        {%- endif %}
+
+        {% if 'button_on' in dict_options['options_enabled'] -%}
+          <div class="col-4 col-md-2 small-gutters">
+        {% else %}
+          <div class="col-8 col-md-4 small-gutters">
+        {% endif %}
+            <input class="form-control btn btn-primary btn-sm btn-danger btn-block turn_off" id="turn_off" name="{{each_output.unique_id}}/0/off/sec/0" type="button" value="{{dict_translation['off']['title']}}">
+          </div>
+
+        </div>
+        {% else %}
+
+        <div class="row small-gutters" style="border-bottom: 1px solid #ddd; padding: 0.4em 0.2em 0.4em 0;" id="">
+            <div class="col-2 col-md-1 text-center icon-fh">
+            <a data-toggle="collapse" href="#collapseContainer{{each_output.unique_id}}" aria-expanded="false" aria-controls="collapseContainer{{each_output.unique_id}}">
+              <span style="font-size: 3.6em" class="collapse-button{{each_output.unique_id}} fa fa-plus-square"></span>
+            </a>
+          </div>
+          <div class="col-5 col-md-2 small-gutters">
+            <input class="form-control" disabled="" value="{{each_output.name}}" type="text">
+          </div>
+          <div class="col-5 col-md-3 small-gutters">
+            <input class="form-control" disabled="" value="[{{each_output.interface}}] {{dict_outputs[each_output.output_type]['output_name']}}{% if dict_outputs[each_output.output_type]['output_library'] %} ({{dict_outputs[each_output.output_type]['output_library']}}){% endif %}" type="text">
+          </div>
+        </div>
+
+        {% for each_output_channel in dict_outputs[each_output.output_type]['channels_dict'] %}
+
+        <div class="row small-gutters pause-background" style="border-bottom: 1px solid #ddd; padding: 0.4em 0.2em 0.4em 0;" id="{{each_output.unique_id}}-{{each_output_channel}}-output-state">
+          <div class="col-7 col-md-3 text-center icon-fh"></div>
+          <div class="col-5 col-md-3 small-gutters">
+            <input class="form-control" disabled="" value="CH{{each_output_channel}}
+          {%- if 'name' in custom_options_values_output_channels[each_output.unique_id][each_output_channel] and
+                 custom_options_values_output_channels[each_output.unique_id][each_output_channel]['name'] -%}
+            {{': ' + custom_options_values_output_channels[each_output.unique_id][each_output_channel]['name']}}
+          {%- elif 'name' in dict_outputs[each_output.output_type]['channels_dict'][each_output_channel] -%}
+            {{': ' + dict_outputs[each_output.output_type]['channels_dict'][each_output_channel]['name']}}
+          {%- endif -%}
+            " type="text">
+          </div>
+          <div class="col-4 col-md-2 small-gutters">
+            <input class="form-control btn btn-primary btn-sm btn-block" type="button" onclick="setClipboard('{{each_output.unique_id}}')" id="{{each_output.unique_id}}-{{each_output_channel}}-input-output-state" title="[{{'%02d' % each_output.id}}] UUID: {{each_output.unique_id}}, {{dict_translation['copy_to_clipboard']['phrase']}}" value="{{ _('Unconfigured')}}">
+          </div>
+
+        {% if 'button_on' in dict_options['options_enabled'] -%}
+          <div class="col-4 col-md-2 small-gutters">
+            <input class="form-control btn btn-primary btn-sm btn-success btn-block turn_on" id="turn_on" name="{{each_output.unique_id}}/{{each_output_channel}}/on/sec/0" type="button" value="{{dict_translation['on']['title']}}">
+          </div>
+        {%- endif %}
+
+        {% if 'button_on' in dict_options['options_enabled'] -%}
+          <div class="col-4 col-md-2 small-gutters">
+        {% else %}
+          <div class="col-8 col-md-4 small-gutters">
+        {% endif %}
+            <input class="form-control btn btn-primary btn-sm btn-danger btn-block turn_off" id="turn_off" name="{{each_output.unique_id}}/{{each_output_channel}}/off/sec/0" type="button" value="{{dict_translation['off']['title']}}">
+          </div>
+
+        </div>
+        {% endfor %}
+
+        {% endif %}
+
+        <div class="collapse" id="collapseContainer{{each_output.unique_id}}" style="padding: 0.5em">
+
+          <div class="row small-gutters">
+            <div class="col-auto">
+              {{form_mod_output.save(class_='form-control btn btn-primary btn-sm btn-block')}}
+            </div>
+            <div class="col-auto">
+              {{form_mod_output.delete(class_='form-control btn btn-primary btn-sm btn-block', **{'onclick':'return confirm("Are you sure you want to delete this?")'})}}
+            </div>
+          </div>
+
+          <div class="row small-gutters" style="padding: 0.5em">
+
+            <div class="col-12">
+              {{_("Output")}}: {{dict_outputs[each_output.output_type]['output_name']}}
+            </div>
+
+        {% if 'dependencies_module' in dict_outputs[each_output.output_type] and dict_outputs[each_output.output_type]['dependencies_module'] %}
+            <div class="col-12">
+          {{_("Library")}}:
+          {% for each_lib in dict_outputs[each_output.output_type]['dependencies_module'] -%}
+            {% if each_lib[0] == 'pip-pypi' %}
+              {% if "==" in each_lib[2] %}
+            <a href="https://pypi.org/project/{{each_lib[2].split('==')[0]}}/{{each_lib[2].split('==')[1]}}" target="_blank">{{each_lib[2].split('==')[0]}}</a>
+              {% else %}
+            <a href="https://pypi.org/project/{{each_lib[2]}}" target="_blank">{{each_lib[2]}}</a>
+              {%  endif %}
+            {% else %}
+              {{each_lib[1]}}
+            {% endif %}
+            {%- if not loop.last %}, {% endif %}
+          {% endfor %}
+            </div>
+        {% endif %}
+        
+        {% set manufacturer_url = 'url_manufacturer' in dict_outputs[each_output.output_type] and dict_outputs[each_output.output_type]['url_manufacturer'] %}
+        {% set datasheet_url = 'url_datasheet' in dict_outputs[each_output.output_type] and dict_outputs[each_output.output_type]['url_datasheet'] %}
+        {% set product_purchase_url = 'url_product_purchase' in dict_outputs[each_output.output_type] and dict_outputs[each_output.output_type]['url_product_purchase'] %}
+        {% set additional_url = 'url_additional' in dict_outputs[each_output.output_type] and dict_outputs[each_output.output_type]['url_additional'] %}
+  
+        {% if manufacturer_url or datasheet_url or product_purchase_url or additional_url %}
+            <div class="col-12">
+          {{_('Literature') + ': '}}
+        {%- if manufacturer_url -%}
+          {{_("Manufacturer")}} {% for each_url in dict_outputs[each_output.output_type]['url_manufacturer'] %}<a href="{{each_url}}" target="_blank">Link {{loop.index}}</a>{{ ", " if not loop.last }}{% endfor %}
+        {%- endif -%}
+        {%- if datasheet_url -%}
+          {% if manufacturer_url %}; {% endif -%}
+          {{_("Datasheet")}} {% for each_url in dict_outputs[each_output.output_type]['url_datasheet'] %}<a href="{{each_url}}" target="_blank">Link {{loop.index}}</a>{{ ", " if not loop.last }}{% endfor %}
+        {%- endif -%}
+        {%- if product_purchase_url -%}
+          {% if manufacturer_url or datasheet_url %}; {% endif -%}
+          {{_("Product")}} {% for each_url in dict_outputs[each_output.output_type]['url_product_purchase'] %}<a href="{{each_url}}" target="_blank">Link {{loop.index}}</a>{{ ", " if not loop.last }}{% endfor %}
+        {%- endif -%}
+        {%- if additional_url -%}
+          {% if manufacturer_url or datasheet_url or product_purchase_url %}; {% endif -%}
+          {{_("Additional")}} {% for each_url in dict_outputs[each_output.output_type]['url_additional'] %}<a href="{{each_url}}" target="_blank">Link {{loop.index}}</a>{{ ", " if not loop.last }}{% endfor %}
+        {%- endif -%}.
+            </div>
+        {% endif %}
+
+        {% if 'message' in dict_outputs[each_output.output_type] %}
+            <div class="col-12" style="padding-top: 0.3em">
+              {{dict_outputs[each_output.output_type]['message']|safe}}
+            </div>
+        {% endif %}
+
+          </div>
+
+        {% if each_output.output_type in custom_actions and custom_actions[each_output.output_type] %}
+          <div class="row small-gutters align-items-end" style="padding: 0.5em">
+            <div class="col-12">
+              <h5>{{_('Actions')}}</h5>
+            </div>
+            {% include 'pages/form_options/Custom_Actions_Message.html' %}
+              {% set running_custom_action = true %}
+              {% if 'custom_actions' in dict_options %}
+                {% for each_option in dict_options['custom_actions'] %}
+                  {% include 'pages/form_options/Custom_Options.html' %}
+                {% endfor %}
+            {% endif %}
+          </div>
+        {% endif %}
+
+          <div class="row small-gutters" style="padding: 0.5em">
+            <div class="col-12">
+              <h5>{{_('Output Options')}}</h5>
+            </div>
+
+            <div class="col-auto">
+              {{form_mod_output.name.label(class_='control-label')}}
+              <div>
+                {{form_mod_output.name(class_='form-control', value=each_output.name, **{'title': dict_translation['name']['phrase']})}}
+              </div>
+            </div>
+            <div class="col-auto">
+              {{form_mod_output.log_level_debug.label(class_='control-label')}}
+              <div class="input-group-text">
+                <input id="log_level_debug" name="log_level_debug" type="checkbox" value="y"{% if each_output.log_level_debug %} checked{% endif %}>
+              </div>
+            </div>
+
+      {% include 'pages/form_options/Interface.html' %}
+      {% include 'pages/form_options/GPIO.html' %}
+      {% include 'pages/form_options/GPIO_Pin.html' %}
+      {% include 'pages/form_options/Bluetooth.html' %}
+      {% include 'pages/form_options/I2C.html' %}
+      {% include 'pages/form_options/FTDI.html' %}
+      {% include 'pages/form_options/UART.html' %}
+      {% include 'pages/form_options/Baud_Rate.html' %}
+      {% include 'pages/form_options/Location.html' %}
+      {% include 'pages/form_options/Period.html' %}
+
+          </div>
+
+        {% if 'custom_options' in dict_options or 'custom_options_message' in dict_options %}
+          <div class="row small-gutters" style="padding: 0.5em">
+            <div class="col-12">
+              <h5>{{_('Custom Options')}}</h5>
+            </div>
+          {% if 'custom_options_message' in dict_options %}
+            {% include 'pages/form_options/Custom_Options_Message.html' %}
+          {% endif %}
+          {% if 'custom_options' in dict_options %}
+            {% for each_option in dict_options['custom_options'] %}
+              {% if each_option['type'] == 'new_line' %}
+            </div>
+            <div class="row small-gutters" style="padding: 0.5em">
+              {% elif each_option['type'] == 'message' %}
+              <div class="col-12" style="padding-bottom: 0.5em">
+                {{each_option['default_value']|safe}}
+              </div>
+              {% else %}
+                {% include 'pages/form_options/Custom_Options.html' %}
+              {% endif %}
+            {% endfor %}
+          {% endif %}
+          </div>
+        {% endif %}
+
+        {%- set output_channel_exists = [] -%}
+        {% for each_output_channel in output_channel if each_output_channel.output_id == each_output.unique_id %}
+          {%- do output_channel_exists.append(1) -%}
+        {% endfor %}
+
+        {% if output_channel_exists %}
+
+          <div class="row small-gutters" style="padding: 1em 0 0 0.5em">
+            <div class="col-12">
+              <h5>{{_('Channel Options')}}</h5>
+            </div>
+          </div>
+
+        {% endif %}
+
+        {% for each_output_channel in output_channel if each_output_channel.output_id == each_output.unique_id %}
+
+          <hr/>
+          <div class="row">
+            <div class="col-auto">
+              Channel {{each_output_channel.channel}}
+
+            {%- if 'name' in custom_options_values_output_channels[each_output.unique_id][each_output_channel.channel] and
+                 custom_options_values_output_channels[each_output.unique_id][each_output_channel.channel]['name'] -%}
+              {{': ' + custom_options_values_output_channels[each_output.unique_id][each_output_channel.channel]['name']}}
+            {%- elif 'name' in dict_outputs[each_output.output_type]['channels_dict'][each_output_channel.channel] -%}
+              {{': ' + dict_outputs[each_output.output_type]['channels_dict'][each_output_channel.channel]['name']}}
+            {%- endif -%}
+            </div>
+          </div>
+
+              {% set dict_options = dict_outputs[each_output.output_type] %}
+              {% set unique_id = each_output.unique_id %}
+              {% set custom_options_values = custom_options_values_output_channels %}
+              {% set channel = each_output_channel.channel %}
+              {% set each_device = each_output %}
+
+              {% if custom_options_values[unique_id] %}
+
+                {% if 'custom_channel_options_message' in dict_options %}
+            <div class="row small-gutters" style="padding: 1em">
+                <div class="col-12" style="padding-bottom: 0.5em">
+                  {{dict_options['custom_channel_options_message']|safe}}
+                </div>
+            </div>
+                {% endif %}
+
+                {% if 'custom_channel_options' in dict_options %}
+            <div class="row small-gutters" style="padding: 1em">
+                  {% for each_option in dict_options['custom_channel_options'] %}
+                    {% if each_option['type'] == 'new_line' %}
+            </div>
+            <div class="row small-gutters" style="padding: 0.5em">
+                    {% elif each_option['type'] == 'message' %}
+              <div class="col-12" style="padding-bottom: 0.5em">
+                {{each_option['default_value']|safe}}
+              </div>
+                    {% else %}
+              {% include 'pages/form_options/Custom_Options_Channels.html' %}
+                    {% endif %}
+                  {% endfor %}
+            </div>
+                {% endif %}
+              {% endif %}
+
+          {% if 'button_send_duration' in dict_options['options_enabled'] or
+                'button_send_value' in dict_options['options_enabled'] or
+                'button_send_volume' in dict_options['options_enabled'] or
+                'button_send_duty_cycle' in dict_options['options_enabled']  %}
+
+          <div class="row align-items-end small-gutters" style="padding: 0.5em 0 0.5em 1.0em">
+
+            {% if 'button_send_duration' in dict_options['options_enabled'] %}
+
+            <div class="col-auto">
+              <label class='form-check-label'>{{dict_translation['output_amount_duration']['title']}}</label>
+              <div>
+                <input class="form-control" id="sec_on_amt_{{each_output.unique_id}}_{{each_output_channel.unique_id}}" name="sec_on_amt_{{each_output.unique_id}}_{{each_output_channel.unique_id}}" title="{{dict_translation['output_amount_duration']['phrase']}}" type="text" value="">
+              </div>
+            </div>
+            <div class="col-auto">
+              <input class="btn btn-success btn-block output_on_amt" id="turn_on" name="{{each_output.unique_id}}/{{each_output_channel.unique_id}}/on/sec/" type="button" value="{{_('Send')}}">
+            </div>
+
+            {% endif %}
+
+            {% if 'button_send_value' in dict_options['options_enabled'] %}
+
+            <div class="col-auto">
+              <label class='form-check-label'>{{dict_translation['output_amount_value']['title']}}</label>
+              <div>
+                <input class="form-control" id="value_on_amt_{{each_output.unique_id}}_{{each_output_channel.unique_id}}" name="value_on_amt_{{each_output.unique_id}}_{{each_output_channel.unique_id}}" title="{{dict_translation['output_amount_value']['phrase']}}" type="text" value="">
+              </div>
+            </div>
+            <div class="col-auto">
+              <input class="btn btn-success btn-block output_on_amt" id="turn_on" name="{{each_output.unique_id}}/{{each_output_channel.unique_id}}/on/value/" type="button" value="{{_('Send')}}">
+            </div>
+
+            {% endif %}
+
+            {% if 'button_send_volume' in dict_options['options_enabled'] %}
+
+            <div class="col-auto">
+              <label class='form-check-label'>{{dict_translation['output_amount_volume']['title']}}</label>
+              <div>
+                <input class="form-control" id="vol_on_amt_{{each_output.unique_id}}_{{each_output_channel.unique_id}}" name="vol_on_amt_{{each_output.unique_id}}_{{each_output_channel.unique_id}}" title="{{dict_translation['output_amount_volume']['phrase']}}" type="text" value="">
+              </div>
+            </div>
+            <div class="col-auto">
+              <input class="btn btn-success btn-block output_on_amt" id="turn_on" name="{{each_output.unique_id}}/{{each_output_channel.unique_id}}/on/vol/" type="button" value="{{_('Send')}}">
+            </div>
+
+            {% endif %}
+
+            {% if 'button_send_duty_cycle' in dict_options['options_enabled'] %}
+
+            <div class="col-auto">
+              <label class='form-check-label'>{{dict_translation['duty_cycle']['title']}}</label>
+              <div>
+                <input class="form-control" id="pwm_on_amt_{{each_output.unique_id}}_{{each_output_channel.unique_id}}" name="pwm_on_amt_{{each_output.unique_id}}_{{each_output_channel.unique_id}}" title="{{dict_translation['duty_cycle']['phrase']}}" type="number" value="">
+              </div>
+            </div>
+            <div class="col-auto">
+              <input class="btn btn-success btn-block output_on_amt" id="turn_on" name="{{each_output.unique_id}}/{{each_output_channel.unique_id}}/on/pwm/" type="button" value="{{_('Send')}}">
+            </div>
+
+            {% endif %}
+
+          </div>
+
+          {% endif %}
+
+        {% endfor %}
+
+        </div>
+
+        </form>
+
+      </div>
+
+      <div style="clear: both; padding-bottom: 0.5em;"></div>
+
+        {%- endfor -%}
+      {%- endfor -%}
+
+      <div class="form-inline" style="padding-bottom: 1em;">
+        <div class="form-group">
+          <a data-toggle="collapse" href="#collapseContainerReorder" aria-expanded="false" aria-controls="collapseContainerReorder" class="btn btn-sm btn-primary" role="button">{{dict_translation['output']['title'] + ' ' + dict_translation['reorder']['title']}}</a>
+        </div>
+      </div>
+
+     <div class="collapse" id="collapseContainerReorder" style="padding-bottom: 1em">
+
+      <form method="post" action="/output">
+      {{form_base.csrf_token}}
+
+      <div class="row" style="padding-bottom: 0.5em">
+        <div class="col-auto">
+          {{form_base.reorder(class_='btn btn-primary')}}
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col-auto">
+        {{form_base.reorder_type(class_='form-control', value='output')}}
+          <select style="display: none" name="from[]" id="multiselect" class="" size="8" multiple="multiple"></select>
+          <div>
+            <select name="list_visible_elements" id="multiselect_to" class="form-control" size="8" multiple="multiple">
+            {% if display_order_output -%}
+              {% for each_visible in display_order_output if each_visible in names_output %}
+                <option value="{{each_visible}}">{{names_output[each_visible]}}</option>
+              {% endfor %}
+            {% endif %}
+            </select>
+            <div class="row">
+              <div class="col-sm-6">
+                <button type="button" id="multiselect_move_up" class="btn btn-sm btn-block btn-primary"><i class="fa fa-arrow-up"></i></button>
+              </div>
+              <div class="col-sm-6">
+                <button type="button" id="multiselect_move_down" class="btn btn-sm btn-block btn-primary"><i class="fa fa-arrow-down"></i></button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      </form>
+    </div>
+
+    {%- endif -%}
+
+  </main>
+
+  <div style="clear: both; padding: 0.5em 0;"></div>
+
+  <script>
+    $('.collapse').on('show.bs.collapse', function(){
+      $(this).parent().find(".fa-plus-square").removeClass("fa-plus-square").addClass("fa-minus-square");
+    }).on('hide.bs.collapse', function(){
+      $(this).parent().find(".fa-minus-square").removeClass("fa-minus-square").addClass("fa-plus-square");
+    });
+
+    jQuery(document).ready(function($) {
+      $('#multiselect').multiselect({
+          sort: false,
+          keepRenderingSort: true
+      });
+    });
+
+    $('#collapseContainerReorder').on('shown.bs.collapse', function () {
+      this.scrollIntoView();
+    });
+  </script>
+
+{% endblock %}

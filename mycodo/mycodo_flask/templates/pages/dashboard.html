@@ -1,0 +1,387 @@
+{% extends "layout.html" %}
+{% set active_page = "dashboard" %}
+{% set help_page = ["https://kizniche.github.io/Mycodo/Data-Viewing/#dashboard", dict_translation['dashboard']['title']] %}
+
+{% block title %} - {% for each_dash in dashboards if each_dash['dashboard_id'] == dashboard_id %}{{each_dash['name']}}{% endfor %} {{dict_translation['dashboard']['title']}}{% endblock %}
+
+{% block head %}
+
+  <script type="text/javascript" src="/static/js/highstock.js"></script>
+  <script type="text/javascript" src="/static/js/highcharts-more.js"></script>
+
+  <script type="text/javascript" src="/static/js/modules/data.js"></script>
+  <script type="text/javascript" src="/static/js/modules/exporting.js"></script>
+  <script type="text/javascript" src="/static/js/modules/export-data.js"></script>
+  <script type="text/javascript" src="/static/js/modules/offline-exporting.js"></script>
+
+  {# Graph popup effect#}
+  <script type="text/javascript" src="/static/js/modules/highslide-full.js"></script>
+  <script type="text/javascript" src="/static/js/modules/highslide.config.js"></script>
+  <link href="/static/css/highslide.css" rel="stylesheet">
+
+  <script type="text/javascript" src="/static/js/multiselect.min.js"></script>
+
+  {% if current_user.theme in dark_themes %}
+    <script type="text/javascript" src="/static/js/dark-unica.js"></script>
+  {% endif %}
+
+  <link href="/static/css/toastr.min.css" rel="stylesheet"/>
+  <script type="text/javascript" src="/static/js/toastr.min.js"></script>
+
+  <!-- gridstack.js -->
+  <script src="/static/js/jquery.ui.touch-punch.min.js"></script>
+  <link rel="stylesheet" href="/static/css/gridstack.min.css" />
+  <link rel="stylesheet" href="/static/css/gridstack-custom.css" />
+  <script src="/static/js/gridstack.all.js"></script>
+
+  <!-- Dashboard begin head (dashboard {{dashboard_id}}) -->
+  {% for widget_type, file_head in list_html_files_head.items() %}
+  <!-- Widget {{widget_type}} head template begin -->
+  {% include 'user_templates/{}'.format(file_head) %}
+  <!-- Widget {{widget_type}} head template end -->
+  {% endfor %}
+  <!-- Dashboard end head -->
+
+{% endblock %}
+
+{% block body %}
+  <!-- Route: /dashboard -->
+  <div class="container">
+  {% include 'flash_messages.html' %}
+  </div>
+
+  <div class="container-fluid">
+
+    <div class="grid-stack">
+
+    {%- for each_widget in table_widget.query.filter(table_widget.dashboard_id == dashboard_id).all() -%}
+      {%- set chart_number = loop.index -%}
+      {% set widget_options = custom_options_values_widgets[each_widget.unique_id] %}
+      {% set widget_variables = custom_widget_variables[each_widget.unique_id] %}
+
+      <div class="grid-stack-item"
+         data-custom-chart-number="{{chart_number}}"
+         data-custom-id="{{each_widget.unique_id}}"
+         data-name="{{each_widget.name}}"
+         data-gs-x="{{each_widget.position_x}}"
+         data-gs-y="{{each_widget.position_y}}"
+         data-gs-width="{{each_widget.width}}"
+         data-gs-height="{{each_widget.height}}">
+
+        <div class="grid-stack-item-content" style="display: flex; flex-flow: column; height: 100%; padding: 0.xm; border: 1px solid #ddd; border-radius: 5px">
+
+      {% if each_widget.graph_type in dict_widgets %}
+
+        <div class="d-flex justify-content-between panel-heading widget-heading">
+          <div class="my-auto widget-drag-handle">
+            {% if each_widget.enable_drag_handle -%}
+              <i style="font-size: 1.5em" class="fas fa-grip-horizontal" title="Drag"></i>
+            {%- endif %}
+          </div>
+
+          <div class="my-auto widget-title">
+            {% for widget_type, file_title_bar in list_html_files_title_bar.items() if widget_type == each_widget.graph_type %}
+              <!-- Widget {{widget_type}} title_bar template begin -->
+              {% include 'user_templates/{}'.format(file_title_bar) %}
+              <!-- Widget {{widget_type}} title_bar template end -->
+            {% endfor %}
+          </div>
+
+          <div class="my-auto widget-settings">
+            <a class="btn" data-toggle="modal" data-target="#modal_config_{{chart_number}}">
+              <i style="font-size: 1.5em" class="fas fa-cog"></i>
+            </a>
+          </div>
+        </div>
+
+        <div id="container-graph-{{each_widget.id}}" style="position: relative; flex-grow: 1; padding: 0.35em">
+
+          {% for widget_type, file_body in list_html_files_body.items() if widget_type == each_widget.graph_type %}
+          <!-- Widget {{widget_type}} body template begin -->
+          {% include 'user_templates/{}'.format(file_body) %}
+          <!-- Widget {{widget_type}} body template end -->
+          {% endfor %}
+
+        </div>
+
+        <div class="modal fade" id="modal_config_{{chart_number}}" tabindex="-1" role="dialog" aria-labelledby="ModalLabel" aria-hidden="true">
+          <div class="modal-dialog modal-lg" role="document">
+            <div class="modal-content" style="padding: 1em">
+              <div class="modal-header">
+                <h5 class="modal-title">{{dict_widgets[each_widget.graph_type]['widget_name']}} Widget Configuration</h5>
+              </div>
+
+              <form method="post" action="/dashboard/{{dashboard_id}}">
+                {{form_base.csrf_token}}
+                {{form_base.dashboard_id(value=dashboard_id)}}
+                {{form_base.widget_id(value=each_widget.unique_id)}}
+                <input type="hidden" name="widget_type" value="{{each_widget.graph_type}}">
+
+                <div class="row small-gutters" style="padding: 1em">
+                  {% if 'message' in dict_widgets[each_widget.graph_type] %}
+                  <div class="col-12" style="padding-top: 0.3em; padding-bottom: 1em">
+                    {{dict_widgets[each_widget.graph_type]['message']|safe}}
+                  </div>
+                  {% endif %}
+
+                  {% include 'pages/dashboard_options/TEMPLATE_OPTIONS_WIDGET_MOD.html' %}
+                </div>
+
+                  {% set dict_options = dict_widgets[each_widget.graph_type] %}
+                  {% set unique_id = each_widget.unique_id %}
+                  {% set custom_options_values = custom_options_values_widgets %}
+
+                  {% if custom_options_values[unique_id] %}
+
+                    {% if 'custom_options_message' in dict_options %}
+                <div class="row small-gutters" style="padding: 1em">
+                  {% include 'pages/form_options/Custom_Options_Message.html' %}
+                </div>
+                    {% endif %}
+
+                    {% if 'custom_options' in dict_options %}
+                <div class="row small-gutters" style="padding: 1em">
+                      {% for each_option in dict_options['custom_options'] %}
+                        {% if each_option['type'] == 'new_line' %}
+                </div>
+                <div class="row small-gutters" style="padding: 1em">
+                        {% elif each_option['type'] == 'message' %}
+                  <div class="col-12" style="padding-bottom: 0.5em">
+                    {{each_option['default_value']|safe}}
+                  </div>
+                        {% else %}
+                  {% include 'pages/form_options/Custom_Options.html' %}
+                        {% endif %}
+                      {% endfor %}
+                </div>
+                    {% endif %}
+                  {% endif %}
+
+                  {% for widget_type, file_configure_options in list_html_files_configure_options.items() if widget_type == each_widget.graph_type %}
+                  <!-- Widget {{widget_type}} {{each_widget.unique_id}} configure_options template begin -->
+                  {% include 'user_templates/{}'.format(file_configure_options) %}
+                  <!-- Widget {{widget_type}} {{each_widget.unique_id}} configure_options template end -->
+                  {% endfor %}
+
+                <div class="row small-gutters" style="padding: 1em">
+                  <div class="col-auto">
+                    <button type="button" class="btn btn-primary" data-dismiss="modal">Close</button>
+                  </div>
+                  <div class="col-auto">
+                    {{form_base.modify(class_='btn btn-primary')}}
+                  </div>
+                  <div class="col-auto">
+                    {{form_base.delete(class_='btn btn-primary',**{'onclick':'return confirm("Are you sure you want to delete this?")'})}}
+                  </div>
+                </div>
+
+              </form>
+
+            </div>
+          </div>
+        </div>
+
+      {% endif %}
+
+        </div>
+      </div>
+
+    {%- endfor -%}
+
+    </div>
+    <hr/>
+
+  </div>
+
+  <div style="clear: both"></div>
+
+  <div class="container-fluid" style="padding-bottom: 1em">
+
+    <div class="form-inline" style="padding-bottom: 1em;">
+      <div class="form-group">
+        {{form_base.widget_type(class_='selectpicker', **{'data-style': 'btn btn-sm btn-primary'})}}
+      </div>
+    </div>
+
+  {% for each_widget in dict_widgets %}
+
+  <div class="add_dashboard_widget" style="display: none" id="{{each_widget}}">
+
+    <form method="post" action="/dashboard/{{dashboard_id}}">
+    {{form_base.csrf_token}}
+    <input type="hidden" name="dashboard_id" value="{{dashboard_id}}">
+    <input type="hidden" name="widget_type" value="{{each_widget}}">
+
+    <div class="form-row small-gutters">
+      {% include 'pages/dashboard_options/TEMPLATE_OPTIONS_WIDGET_ADD.html' %}
+    </div>
+
+    {% set dict_options = dict_widgets[each_widget] %}
+
+    {% if 'custom_options' in dict_widgets[each_widget] %}
+    <div class="row small-gutters" style="padding: 0.5em">
+      <div class="col-12">
+        <h5>{{_('Custom Options')}}</h5>
+      </div>
+      {% include 'pages/form_options/Custom_Options_Message.html' %}
+          {% for each_option in dict_widgets[each_widget]['custom_options'] %}
+            {% if each_option['type'] == 'new_line' %}
+    </div>
+    <div class="row small-gutters" style="padding: 0.5em">
+            {% elif each_option['type'] == 'message' %}
+      <div class="col-12" style="padding-bottom: 0.5em">
+        {{each_option['default_value']|safe}}
+      </div>
+            {% else %}
+      {% include 'pages/form_options_add/Custom_Options.html' %}
+            {% endif %}
+          {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="form-inline btn-group" style="padding: 1em 0 1em 0">
+      <div class="form-group">
+        {{form_base.create(class_='btn btn-primary')}}
+      </div>
+    </div>
+
+    </form>
+  </div>
+  {% endfor %}
+
+  </div>
+
+<script type="text/javascript">
+
+// Dashboard begin js
+{% for widget_type, file_js in list_html_files_js.items() %}
+// Widget {{widget_type}} js template begin
+{% include 'user_templates/{}'.format(file_js) %}
+// Widget {{widget_type}} js template end
+{% endfor %}
+// Dashboard end js
+
+// Dashboard Grid
+let options = {
+  cellHeight: {{misc.grid_cell_height}},
+  column: 20,
+  resizable: {
+    handles: 'se, sw'
+  },
+  draggable: {
+    handle: '.panel-heading'
+  },
+  alwaysShowResizeHandle: /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent),
+  float: true
+};
+let grid = $('.grid-stack').gridstack(options);
+
+grid.on('change', function (event, items) {
+  if ($(items)) {
+    let res = $('.grid-stack > .grid-stack-item:visible').map(function (i, el) {
+      el = $(el);
+      const node = el.data('_gridstack_node');
+      return {
+        name: el.attr('data-name'),
+        widget_id: el.attr('data-custom-id'),
+        position_x: node.x,
+        position_y: node.y,
+        width: node.width,
+        height: node.height
+      };
+    });
+    $.ajax({
+      url: "/save_dashboard_layout",
+      type: "POST",
+      data: JSON.stringify(res.toArray()),
+      contentType: "application/json; charset=utf-8",
+      success: function (dat) {
+      }
+    });
+  }
+});
+
+jQuery(document).ready(function($) {
+  $('#multiselect').multiselect({
+    sort: false,
+    keepRenderingSort: true
+  });
+});
+
+// Add Dashboard Widget content selector
+$('#widget_type').on('change', function () {
+  let x = document.getElementsByClassName("add_dashboard_widget");  // Find the widgets
+  for(let i = 0; i < x.length; i++){
+    x[i].style.display = "none";    // Change the content
+  }
+  if (this.value !== '') {
+    document.getElementById(this.value).style.display = "block";
+    document.getElementById(this.value).scrollIntoView();
+  }
+});
+
+// Graph Widget
+Highcharts.setOptions({
+  global: {
+    useUTC: false
+  },
+  lang: {
+    thousandsSep: ','
+  }
+});
+
+// Store the time (epoch) of the last data point received, for every condition of every graph
+let last_output_time_mil = {};
+
+$(document).ready(function() {
+  let chart = [];
+  let note_timestamps = [];
+
+  // Return timestamp from epoch (used in multiple widgets)
+  function epoch_to_timestamp(epoch) {
+    const date = new Date(parseFloat(epoch));
+    const year = date.getFullYear();
+    const month = date.getMonth() + 1;
+    const day = date.getDate();
+    const hours = date.getHours();
+    const minutes = "0" + date.getMinutes();
+    const seconds = "0" + date.getSeconds();
+    return month + "/" + day + " " + hours + ':' + minutes.substr(-2) + ':' + seconds.substr(-2);
+  }
+
+  <!-- Dashboard begin js_ready (dashboard {{dashboard_id}}) -->
+  {% for widget_type, file_js_ready in list_html_files_js_ready.items() %}
+  <!-- Widget {{widget_type}} js_ready template begin -->
+  {% include 'user_templates/{}'.format(file_js_ready) %}
+  <!-- Widget {{widget_type}} js_ready template end -->
+  {% endfor %}
+  <!-- Dashboard end js_ready -->
+
+  // Change opacity of all chart colors
+  Highcharts.getOptions().colors = Highcharts.map(Highcharts.getOptions().colors, function (color) {
+    return Highcharts.Color(color).setOpacity(0.6).get('rgba');
+  });
+
+{% for each_widget in table_widget.query.filter(table_widget.dashboard_id == dashboard_id).all() -%}
+  {%- set chart_number = loop.index -%}
+  {% set widget_options = custom_options_values_widgets[each_widget.unique_id] %}
+  {% set widget_variables = custom_widget_variables[each_widget.unique_id] %}
+
+  {% for widget_type, file_js_ready_end in list_html_files_js_ready_end.items() if widget_type == each_widget.graph_type %}
+  <!-- Widget {{widget_type}} {{each_widget.unique_id}} js_ready_end template begin -->
+  {% include 'user_templates/{}'.format(file_js_ready_end) %}
+  <!-- Widget {{widget_type}} {{each_widget.unique_id}} js_ready_end template end -->
+  {% endfor %}
+
+{%- endfor %}
+
+  $('.grid-stack').on('gsresizestop', function(event, elem) {
+    const chart_number = $(elem).attr('data-custom-chart-number');
+    chart[chart_number].reflow();
+  });
+
+});
+
+</script>
+
+{% endblock %}
